@@ -1,0 +1,140 @@
+
+## Backend README
+
+### `cspapp-backend/README.md`
+
+```markdown
+# CSPAPP Backend - Church Management System API
+
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-4.18-blue.svg)](https://expressjs.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-8.0-green.svg)](https://www.mongodb.com/)
+[![JWT](https://img.shields.io/badge/JWT-Auth-orange.svg)](https://jwt.io/)
+
+## 📋 Overview
+
+CSPAPP Backend is a robust, production-ready RESTful API for church management systems. It provides secure authentication, payment processing, email/SMS notifications, and comprehensive data management capabilities.
+
+## ✨ Features
+
+### Core Features
+- 🔐 **JWT Authentication** - Secure token-based authentication
+- 👥 **User Management** - Role-based access (Admin/Member)
+- 💰 **Payment Integration** - Paystack payment gateway
+- 📧 **Email Service** - Nodemailer with SMTP support
+- 📱 **SMS Service** - HollaTags integration
+- 📅 **Event Management** - Create and manage church events
+- 📊 **Analytics** - Donation statistics and reports
+- 🔒 **Security** - Helmet, CORS, Rate limiting
+- 📝 **Logging** - Winston logger with file rotation
+
+### Admin Features
+- Member CRUD operations
+- Donation management and export
+- Event scheduling
+- Mass communications (Email/SMS)
+- Automated birthday wishes
+- System settings configuration
+
+## 🛠️ Tech Stack
+
+- **Runtime**: Node.js 20+
+- **Framework**: Express.js 4.18
+- **Database**: MongoDB with Mongoose ODM
+- **Authentication**: JWT (JSON Web Tokens)
+- **Payment**: Paystack API
+- **Email**: Nodemailer (SMTP)
+- **SMS**: HollaTags API
+- **Validation**: Zod + express-validator
+- **Security**: Helmet, CORS, express-rate-limit
+- **Logging**: Winston + Morgan
+- **File Upload**: Multer + Cloudinary
+- **Testing**: Jest + Supertest
+
+## 📁 Project Structure
+
+cspapp-backend/
+├── src/
+│ ├── config/
+│ │ ├── database.js
+│ │ ├── cloudinary.js
+│ │ └── index.js
+│ ├── controllers/
+│ │ ├── authController.js
+│ │ ├── userController.js
+│ │ ├── donationController.js
+│ │ ├── eventController.js
+│ │ ├── commsController.js
+│ │ └── index.js
+│ ├── middleware/
+│ │ ├── auth.js
+│ │ ├── errorHandler.js
+│ │ ├── rateLimiter.js
+│ │ ├── validation.js
+│ │ ├── upload.js
+│ │ └── index.js
+│ ├── models/
+│ │ ├── User.js
+│ │ ├── Donation.js
+│ │ ├── Event.js
+│ │ ├── Communication.js
+│ │ ├── Settings.js
+│ │ └── index.js
+│ ├── routes/
+│ │ ├── authRoutes.js
+│ │ ├── userRoutes.js
+│ │ ├── donationRoutes.js
+│ │ ├── eventRoutes.js
+│ │ ├── commsRoutes.js
+│ │ └── index.js
+│ ├── services/
+│ │ ├── paystackService.js
+│ │ ├── emailService.js
+│ │ ├── smsService.js
+│ │ └── index.js
+│ ├── utils/
+│ │ ├── helpers.js
+│ │ ├── jwtHelper.js
+│ │ ├── logger.js
+│ │ ├── passwordHelper.js
+│ │ └── index.js
+│ ├── app.js
+│ └── index.js
+├── uploads/
+├── logs/
+├── .env
+├── .env.example
+├── .gitignore
+├── package.json
+├── server.js
+└── README.md
+
+## 🚀 Installation
+
+### Prerequisites
+- Node.js (v20 or higher)
+- MongoDB (local or Atlas)
+- npm or yarn
+
+### Step 1: Clone the repository
+```bash
+git clone https://github.com/your-repo/cspapp-backend.git
+cd cspapp-backend
+Step 2: Install dependencies
+bash
+npm install
+Step 4: Start MongoDB
+bash
+# Local MongoDB
+mongod
+
+# Or use MongoDB Atlas (cloud)
+
+Step 5: Start the server
+bash
+# Development mode
+npm run dev
+
+# Production mode
+npm start
+update .env
