@@ -1,68 +1,81 @@
 const axios = require('axios');
+const querystring = require('querystring');
 
 class SmsService {
   constructor() {
-    this.apiKey = process.env.HOLLATAGS_API_KEY;
     this.username = process.env.HOLLATAGS_USERNAME;
+    this.password = process.env.HOLLATAGS_PASSWORD;
     this.senderId = process.env.HOLLATAGS_SENDER_ID;
-    this.baseURL = process.env.HOLLATAGS_BASE_URL;
+    this.baseURL = 'https://sms.hollatags.com/api';
+    
+    console.log('SMS Service Config:', {
+      username: this.username,
+      senderId: this.senderId,
+      hasPassword: !!this.password
+    });
   }
 
-  // Send single SMS
-  async sendSMS(phoneNumber, message) {
+  async sendSMS(phoneNumber, message, options = {}) {
     try {
-      // Clean phone number (remove spaces and special chars)
-      const cleanNumber = phoneNumber.replace(/\s+/g, '').replace(/[^0-9+]/g, '');
+      // Clean phone number
+      let cleanNumber = phoneNumber.toString().replace(/\D/g, '');
+      if (cleanNumber.startsWith('0')) {
+        cleanNumber = '234' + cleanNumber.substring(1);
+      } else if (!cleanNumber.startsWith('234')) {
+        cleanNumber = '234' + cleanNumber;
+      }
       
-      const payload = {
-        username: this.username,
-        api_key: this.apiKey,
-        to: cleanNumber,
+      // Create form data with ONLY the required fields
+      const formData = {
+        user: this.username,
+        pass: this.password,
         from: this.senderId,
-        sms: message,
-        type: '0', // 0 = normal SMS
+        to: cleanNumber,
+        msg: message
       };
 
-      const response = await axios.post(`${this.baseURL}/send`, payload, {
-        headers: { 'Content-Type': 'application/json' }
+      // DO NOT add any extra fields like 'subject'
+
+      console.log('Sending SMS:', {
+        to: cleanNumber,
+        msgLength: message.length
       });
 
-      console.log(`SMS sent to ${cleanNumber}:`, response.data);
-      
-      return {
-        success: true,
-        data: response.data,
-        messageId: response.data.message_id
-      };
-    } catch (error) {
-      console.error('SMS sending error:', error.response?.data || error.message);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'SMS sending failed'
-      };
-    }
-  }
+      const response = await axios.post(
+        `${this.baseURL}/send`,
+        querystring.stringify(formData),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          timeout: 30000
+        }
+      );
 
-  // Send bulk SMS
-  async sendBulkSMS(phoneNumbers, message) {
-    try {
-      const results = [];
-      // Send to each number (HollaTags might support batch, sending individually for reliability)
-      for (const phoneNumber of phoneNumbers) {
-        const result = await this.sendSMS(phoneNumber, message);
-        results.push({ phoneNumber, ...result });
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('API Response:', response.data);
+      
+      if (response.data === 'sent') {
+        return {
+          success: true,
+          message: 'SMS sent successfully',
+          data: response.data
+        };
+      }
+      
+      if (response.data === 'error_param') {
+        return {
+          success: false,
+          error: 'Invalid parameters. Check phone number format and credentials.'
+        };
       }
       
       return {
         success: true,
-        results,
-        totalSent: results.filter(r => r.success).length,
-        totalFailed: results.filter(r => !r.success).length
+        data: response.data
       };
+      
     } catch (error) {
-      console.error('Bulk SMS error:', error);
+      console.error('SMS Error:', error.message);
       return {
         success: false,
         error: error.message
@@ -70,28 +83,72 @@ class SmsService {
     }
   }
 
-  // Send donation confirmation SMS
-  async sendDonationConfirmation(user, donation) {
-    const message = `Thank you ${user.fullName} for your ${donation.purpose} donation of ₦${donation.amount.toLocaleString()}. God bless you! - CSPAPP Church`;
-    return await this.sendSMS(user.phoneNumber, message);
+  async sendBulkSMS(phoneNumbers, message) {
+    const results = [];
+    let successCount = 0;
+    
+    for (const number of phoneNumbers) {
+      const result = await this.sendSMS(number, message);
+      results.push(result);
+      if (result.success) successCount++;
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    return {
+      success: successCount > 0,
+      totalSent: successCount,
+      totalAttempted: phoneNumbers.length,
+      results
+    };
   }
 
-  // Send event reminder SMS
-  async sendEventReminder(user, event) {
-    const message = `Reminder: ${event.title} today at ${event.time} at ${event.venue}. Don't be late! - CSPAPP Church`;
-    return await this.sendSMS(user.phoneNumber, message);
+  async checkBalance() {
+    try {
+      const formData = {
+        user: this.username,
+        pass: this.password,
+      };
+      
+      const response = await axios.post(
+        `${this.baseURL}/credit`,
+        querystring.stringify(formData),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          }
+        }
+      );
+      
+      return {
+        success: true,
+        balance: response.data
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 
-  // Send birthday SMS
   async sendBirthdaySMS(user) {
-    const message = `Happy Birthday ${user.fullName}! May God's blessings be upon you today and always. - CSPAPP Church`;
+    const message = `Happy Birthday ${user.fullName}! May God's blessings be upon you today. - CSPAPP Church`;
     return await this.sendSMS(user.phoneNumber, message);
   }
 
-  // Send verification SMS
-  async sendVerificationCode(phoneNumber, code) {
-    const message = `Your CSPAPP verification code is: ${code}. Valid for 10 minutes.`;
-    return await this.sendSMS(phoneNumber, message);
+  async sendDonationConfirmation(user, donation) {
+    const message = `Thank you ${user.fullName} for your ${donation.purpose} of ₦${donation.amount.toLocaleString()}. God bless you! - CSPAPP Church`;
+    return await this.sendSMS(user.phoneNumber, message);
+  }
+
+  async sendWelcomeSMS(user) {
+    const message = `Welcome to CSPAPP Church ${user.fullName}! We're excited to have you. God bless you!`;
+    return await this.sendSMS(user.phoneNumber, message);
+  }
+
+  async sendEventReminder(user, event) {
+    const message = `Reminder: ${event.title} at ${event.venue}. God bless you! - CSPAPP Church`;
+    return await this.sendSMS(user.phoneNumber, message);
   }
 }
 
