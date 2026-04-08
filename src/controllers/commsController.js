@@ -298,6 +298,30 @@ exports.sendBirthdayEmails = async (req, res) => {
   }
 };
 
+// Trigger birthday check manually (admin only)
+exports.triggerBirthdayCheck = async (req, res) => {
+  try {
+    const { sendBirthdayWishes } = require('../jobs/birthdayJob');
+    
+    console.log('Manual birthday trigger by admin:', req.user.email);
+    
+    // Run the birthday job
+    await sendBirthdayWishes();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Birthday check completed successfully'
+    });
+  } catch (error) {
+    console.error('Manual birthday trigger error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to run birthday check',
+      error: error.message
+    });
+  }
+};
+
 // Get communication history
 exports.getCommunicationHistory = async (req, res) => {
   try {

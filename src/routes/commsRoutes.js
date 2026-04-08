@@ -13,6 +13,8 @@ router.post('/sms/single', protect, adminOnly, commsController.sendSingleSMS);
 router.get('/sms/balance', protect, adminOnly, commsController.getSMSBalance);
 router.post('/birthday', protect, adminOnly, commsController.sendBirthdayEmails);
 router.get('/history', protect, adminOnly, commsController.getCommunicationHistory);
+router.post('/birthday/trigger', protect, adminOnly, commsController.triggerBirthdayCheck);
+
 
 // Test SMS endpoint
 router.post('/sms/test', protect, adminOnly, async (req, res) => {

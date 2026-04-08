@@ -8,6 +8,7 @@ const crypto = require('crypto');
 // Register new user
 exports.register = async (req, res) => {
   try {
+    console.log('Register request received:', req.body);
     const {
       fullName,
       email,
@@ -52,9 +53,9 @@ exports.register = async (req, res) => {
     await emailService.sendWelcomeEmail(user);
 
     // Send welcome SMS
-    await smsService.sendSMS(phoneNumber, 
-      `Welcome to CSPAPP Church ${fullName}! We're excited to have you. Login to explore our services.`
-    );
+   // await smsService.sendSMS(phoneNumber, 
+     // `Welcome to CSPAPP Church ${fullName}! We're excited to have you. Login to explore our services.`
+    //);
 
     // Remove password from response
     user.password = undefined;
