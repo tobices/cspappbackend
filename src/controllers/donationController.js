@@ -23,24 +23,26 @@ exports.initializeDonation = async (req, res) => {
     const reference = `CSPAPP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 
     // Create donation record
-    const donation = await Donation.create({
+     const donation = await Donation.create({
       user: userId,
       amount,
       purpose,
       paymentMethod,
-      reference,
+      reference,  // Your internal reference
       status: 'pending',
       paymentGateway: 'paystack'
     });
 
+
     // Initialize Paystack transaction
-    const payment = await paystackService.initializeTransaction(
+       const payment = await paystackService.initializeTransaction(
       user.email,
       amount,
       {
         donationId: donation._id.toString(),
         userId: userId,
-        purpose
+        purpose,
+        internalReference: reference  // Store your internal reference
       }
     );
 
@@ -55,6 +57,10 @@ exports.initializeDonation = async (req, res) => {
 
     donation.paystackReference = payment.data.reference;
     await donation.save();
+ console.log('Donation initialized:', {
+      internalReference: reference,
+      paystackReference: payment.data.reference
+    });
 
     res.status(200).json({
       success: true,
@@ -79,8 +85,16 @@ exports.initializeDonation = async (req, res) => {
 exports.verifyDonation = async (req, res) => {
   try {
     const { reference } = req.params;
+    console.log('Verifying donation with reference:', reference);
     
-    const donation = await Donation.findOne({ reference });
+    // Try to find by either internal reference OR Paystack reference
+    let donation = await Donation.findOne({ reference: reference });
+    
+    if (!donation) {
+      // If not found by internal reference, try by Paystack reference
+      donation = await Donation.findOne({ paystackReference: reference });
+    }
+    
     if (!donation) {
       return res.status(404).json({
         success: false,
@@ -88,8 +102,11 @@ exports.verifyDonation = async (req, res) => {
       });
     }
 
-    // Verify with Paystack
-    const verification = await paystackService.verifyTransaction(reference);
+    // Verify with Paystack using the Paystack reference
+    const paystackRef = donation.paystackReference;
+    console.log('Verifying with Paystack reference:', paystackRef);
+    
+    const verification = await paystackService.verifyTransaction(paystackRef);
     
     if (!verification.success) {
       donation.status = 'failed';
@@ -258,20 +275,87 @@ exports.getAllDonations = async (req, res) => {
   }
 };
 
-// Get donation statistics
+// Get donation statistics (admin only)
 exports.getDonationStats = async (req, res) => {
   try {
     const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth();
+    const currentMonth = new Date().getMonth() + 1; // January = 1
     
-    // Monthly donations for current year
-    const monthlyDonations = await Donation.aggregate([
+    console.log('=================================');
+    console.log('Calculating Donation Statistics');
+    console.log('Current Year:', currentYear);
+    console.log('Current Month:', currentMonth);
+    console.log('=================================');
+    
+    // Get start and end dates for current month
+    const monthStart = new Date(currentYear, currentMonth - 1, 1);
+    const monthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59);
+    
+    // Get start date for current year
+    const yearStart = new Date(currentYear, 0, 1);
+    const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
+    
+    console.log('Month range:', monthStart, 'to', monthEnd);
+    console.log('Year range:', yearStart, 'to', yearEnd);
+    
+    // Calculate current month donations
+    const monthDonations = await Donation.aggregate([
       {
         $match: {
           status: 'completed',
           createdAt: {
-            $gte: new Date(currentYear, 0, 1),
-            $lte: new Date(currentYear, 11, 31)
+            $gte: monthStart,
+            $lte: monthEnd
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Calculate current year donations
+    const yearDonations = await Donation.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          createdAt: {
+            $gte: yearStart,
+            $lte: yearEnd
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    const totalDonationsMonth = monthDonations[0]?.total || 0;
+    const totalDonationsYear = yearDonations[0]?.total || 0;
+    const monthCount = monthDonations[0]?.count || 0;
+    const yearCount = yearDonations[0]?.count || 0;
+    
+    console.log('Month Donations Total:', totalDonationsMonth);
+    console.log('Month Donations Count:', monthCount);
+    console.log('Year Donations Total:', totalDonationsYear);
+    console.log('Year Donations Count:', yearCount);
+    
+    // Monthly breakdown for chart (all months in current year)
+    const monthlyBreakdown = await Donation.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          createdAt: {
+            $gte: yearStart,
+            $lte: yearEnd
           }
         }
       },
@@ -284,7 +368,9 @@ exports.getDonationStats = async (req, res) => {
       },
       { $sort: { '_id': 1 } }
     ]);
-
+    
+    console.log('Monthly Breakdown:', monthlyBreakdown);
+    
     // Donations by purpose
     const byPurpose = await Donation.aggregate([
       { $match: { status: 'completed' } },
@@ -296,24 +382,38 @@ exports.getDonationStats = async (req, res) => {
         }
       }
     ]);
-
-    // Recent donations
+    
+    console.log('By Purpose:', byPurpose);
+    
+    // Recent donations with user info
     const recentDonations = await Donation.find({ status: 'completed' })
-      .populate('user', 'fullName')
+      .populate('user', 'fullName email phoneNumber')
       .sort({ createdAt: -1 })
       .limit(10);
+    
+    // Total counts for all time
+    const totalDonationsCount = await Donation.countDocuments({ status: 'completed' });
+    const totalAmountResult = await Donation.aggregate([
+      { $match: { status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+
+    console.log('Total Donations All Time:', totalDonationsCount);
+    console.log('Total Amount All Time:', totalAmountResult[0]?.total || 0);
+    console.log('=================================');
 
     res.status(200).json({
       success: true,
       data: {
-        monthlyDonations,
+        currentMonthTotal: totalDonationsMonth,
+        currentYearTotal: totalDonationsYear,
+        currentMonthCount: monthCount,
+        currentYearCount: yearCount,
+        monthlyBreakdown,
         byPurpose,
         recentDonations,
-        totalDonations: await Donation.countDocuments({ status: 'completed' }),
-        totalAmount: (await Donation.aggregate([
-          { $match: { status: 'completed' } },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-        ]))[0]?.total || 0
+        totalDonations: totalDonationsCount,
+        totalAmount: totalAmountResult[0]?.total || 0
       }
     });
   } catch (error) {
@@ -341,7 +441,8 @@ exports.exportDonations = async (req, res) => {
       'Amount': donation.amount,
       'Purpose': donation.purpose,
       'Transaction ID': donation.transactionId,
-      'Payment Method': donation.paymentMethod
+      'Payment Method': donation.paymentMethod,
+      'Status': donation.status
     }));
 
     const headers = Object.keys(csvData[0]);

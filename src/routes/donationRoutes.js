@@ -3,10 +3,10 @@ const router = express.Router();
 const donationController = require('../controllers/donationController');
 const { protect, adminOnly } = require('../middleware/auth');
 
-// Webhook (public, but verified)
+// Webhook (public, no auth needed)
 router.post('/webhook/paystack', donationController.paystackWebhook);
 
-// Protected routes
+// Protected routes (require authentication)
 router.post('/initialize', protect, donationController.initializeDonation);
 router.get('/verify/:reference', protect, donationController.verifyDonation);
 router.get('/my-donations', protect, donationController.getMyDonations);

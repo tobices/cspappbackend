@@ -13,15 +13,17 @@ class PaystackService {
     });
   }
 
-  // Initialize transaction
   async initializeTransaction(email, amount, metadata = {}) {
     try {
+      const callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
+      console.log('Using callback URL:', callbackUrl);
+      
       const response = await this.axiosInstance.post('/transaction/initialize', {
         email,
         amount: amount * 100, // Paystack expects amount in kobo
         currency: 'NGN',
         metadata,
-        callback_url: process.env.PAYSTACK_CALLBACK_URL,
+        callback_url: callbackUrl,
       });
 
       return {
@@ -39,7 +41,6 @@ class PaystackService {
     }
   }
 
-  // Verify transaction
   async verifyTransaction(reference) {
     try {
       const response = await this.axiosInstance.get(`/transaction/verify/${reference}`);
@@ -64,24 +65,6 @@ class PaystackService {
     }
   }
 
-  // List transactions
-  async listTransactions(params = {}) {
-    try {
-      const response = await this.axiosInstance.get('/transaction', { params });
-      return {
-        success: true,
-        data: response.data.data,
-      };
-    } catch (error) {
-      console.error('Paystack list error:', error.response?.data || error.message);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to fetch transactions',
-      };
-    }
-  }
-
-  // Handle webhook
   verifyWebhook(signature, payload) {
     const crypto = require('crypto');
     const hash = crypto
