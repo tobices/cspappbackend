@@ -1,11 +1,10 @@
 const User = require('../models/User');
-const emailService = require('../services/emailService');
 
 // Get all users (admin only)
 exports.getAllUsers = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 100;
     const skip = (page - 1) * limit;
     const { role, unit, search } = req.query;
 
@@ -62,14 +61,6 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // Check authorization (users can only view themselves, admins can view anyone)
-    if (req.user.role !== 'admin' && req.user.id !== user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-
     res.status(200).json({
       success: true,
       data: { user }
@@ -103,14 +94,63 @@ exports.getCurrentUser = async (req, res) => {
   }
 };
 
-// Update user
+// Update current user (own profile)
+exports.updateCurrentUser = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const updates = req.body;
+    
+    delete updates.password;
+    delete updates.role;
+    delete updates.email;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      updates,
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: { user }
+    });
+  } catch (error) {
+    console.error('Update current user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      error: error.message
+    });
+  }
+};
+
+// Update user (admin or self)
 exports.updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
     
+    console.log('Updating user ID:', id);
+    console.log('Update data:', updates);
+    
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+    
     // Remove sensitive fields
     delete updates.password;
+    delete updates.confirmPassword;
     delete updates.role;
     delete updates.email;
 
@@ -145,7 +185,17 @@ exports.updateUser = async (req, res) => {
 // Delete user (admin only)
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const userId = req.params.id;
+    console.log('Deleting user ID:', userId);
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+    
+    const user = await User.findByIdAndDelete(userId);
     
     if (!user) {
       return res.status(404).json({
@@ -177,11 +227,11 @@ exports.exportUsers = async (req, res) => {
       'Full Name': user.fullName,
       'Email': user.email,
       'Phone': user.phoneNumber,
-      'Date of Birth': user.dateOfBirth.toISOString().split('T')[0],
+      'Date of Birth': user.dateOfBirth ? user.dateOfBirth.toISOString().split('T')[0] : '',
       'Unit': user.unit,
       'Graduation Year': user.graduationYear,
       'Course of Study': user.courseOfStudy,
-      'Member Since': user.createdAt.toISOString().split('T')[0]
+      'Member Since': user.createdAt ? user.createdAt.toISOString().split('T')[0] : ''
     }));
 
     const headers = Object.keys(csvData[0]);

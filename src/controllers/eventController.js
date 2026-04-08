@@ -1,13 +1,11 @@
 const Event = require('../models/Event');
 const User = require('../models/User');
-const emailService = require('../services/emailService');
-const smsService = require('../services/smsService');
 
 // Get all events
 exports.getAllEvents = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 12;
+    const limit = parseInt(req.query.limit) || 100;
     const skip = (page - 1) * limit;
     const { category, upcoming } = req.query;
 
@@ -108,8 +106,12 @@ exports.createEvent = async (req, res) => {
 // Update event (admin only)
 exports.updateEvent = async (req, res) => {
   try {
+    const eventId = req.params.id;
+    console.log('Updating event ID:', eventId);
+    console.log('Update data:', req.body);
+    
     const event = await Event.findByIdAndUpdate(
-      req.params.id,
+      eventId,
       req.body,
       { new: true, runValidators: true }
     );
@@ -139,7 +141,10 @@ exports.updateEvent = async (req, res) => {
 // Delete event (admin only)
 exports.deleteEvent = async (req, res) => {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
+    const eventId = req.params.id;
+    console.log('Deleting event ID:', eventId);
+    
+    const event = await Event.findByIdAndDelete(eventId);
     
     if (!event) {
       return res.status(404).json({
@@ -176,7 +181,6 @@ exports.registerForEvent = async (req, res) => {
       });
     }
 
-    // Check if already registered
     if (event.registeredAttendees.includes(userId)) {
       return res.status(400).json({
         success: false,
@@ -184,7 +188,6 @@ exports.registerForEvent = async (req, res) => {
       });
     }
 
-    // Check capacity
     if (event.capacity && event.registeredAttendees.length >= event.capacity) {
       return res.status(400).json({
         success: false,
@@ -194,19 +197,6 @@ exports.registerForEvent = async (req, res) => {
 
     event.registeredAttendees.push(userId);
     await event.save();
-
-    // Get user
-    const user = await User.findById(userId);
-    
-    // Send confirmation email
-    await emailService.sendEmail(
-      user.email,
-      `Registration Confirmed: ${event.title}`,
-      `<p>You have successfully registered for ${event.title} on ${new Date(event.date).toLocaleDateString()} at ${event.time}.</p>`
-    );
-
-    // Send SMS confirmation
-    await smsService.sendEventReminder(user, event);
 
     res.status(200).json({
       success: true,

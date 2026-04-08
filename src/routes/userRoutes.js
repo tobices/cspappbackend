@@ -3,9 +3,11 @@ const router = express.Router();
 const userController = require('../controllers/userController');
 const { protect, adminOnly } = require('../middleware/auth');
 
-// Protected routes
+// Protected routes (authenticated users)
 router.get('/profile', protect, userController.getCurrentUser);
+router.put('/profile', protect, userController.updateCurrentUser);
 router.put('/profile/:id', protect, userController.updateUser);
+router.put('/:id', protect, userController.updateUser);
 
 // Admin only routes
 router.get('/', protect, adminOnly, userController.getAllUsers);
