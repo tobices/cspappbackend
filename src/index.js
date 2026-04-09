@@ -4,7 +4,8 @@
  */
 const dotenv = require('dotenv');
 dotenv.config();
-
+// Import birthday job (this will initialize the scheduler)
+require('./jobs/birthdayJob');
 // Verify critical environment variables
 if (!process.env.MONGODB_URI) {
   console.error('❌ ERROR: MONGODB_URI is not defined in .env file');
