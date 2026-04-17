@@ -427,35 +427,165 @@ exports.getDonationStats = async (req, res) => {
 };
 
 // Export donations to CSV (admin only)
+// Export donations to CSV (admin only)
 exports.exportDonations = async (req, res) => {
   try {
+    console.log('=== EXPORT DONATIONS STARTED ===');
+    
+    // Fetch all completed donations with user details
     const donations = await Donation.find({ status: 'completed' })
       .populate('user', 'fullName email phoneNumber')
       .sort({ createdAt: -1 });
 
-    const csvData = donations.map(donation => ({
-      'Date': donation.createdAt.toISOString().split('T')[0],
-      'Donor Name': donation.user.fullName,
-      'Donor Email': donation.user.email,
-      'Donor Phone': donation.user.phoneNumber,
-      'Amount': donation.amount,
-      'Purpose': donation.purpose,
-      'Transaction ID': donation.transactionId,
-      'Payment Method': donation.paymentMethod,
-      'Status': donation.status
-    }));
+    console.log(`Found ${donations.length} donations to export`);
 
-    const headers = Object.keys(csvData[0]);
-    const csv = [headers.join(','), ...csvData.map(row => headers.map(h => row[h]).join(','))].join('\n');
+    // Define CSV headers
+    const headers = [
+      'Date', 
+      'Donor Name', 
+      'Donor Email', 
+      'Donor Phone', 
+      'Amount', 
+      'Purpose', 
+      'Transaction ID', 
+      'Payment Method',
+      'Status'
+    ];
     
-    res.setHeader('Content-Type', 'text/csv');
+    // If no donations, return only headers
+    if (donations.length === 0) {
+      const csv = headers.join(',');
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=donations_${Date.now()}.csv`);
+      return res.status(200).send(csv);
+    }
+
+    // Build CSV rows
+    const rows = [];
+    
+    // Add headers
+    rows.push(headers.join(','));
+    
+    // Add data rows
+    for (const donation of donations) {
+      const user = donation.user || {};
+      
+      // Format each field
+      const date = donation.createdAt ? new Date(donation.createdAt).toISOString().split('T')[0] : 'N/A';
+      const donorName = user.fullName || 'Unknown';
+      const donorEmail = user.email || 'Unknown';
+      const donorPhone = user.phoneNumber || 'Unknown';
+      const amount = donation.amount || 0;
+      const purpose = donation.purpose || 'N/A';
+      const transactionId = donation.transactionId || 'N/A';
+      const paymentMethod = donation.paymentMethod || 'N/A';
+      const status = donation.status || 'N/A';
+      
+      // Create row array
+      const row = [
+        date,
+        `"${donorName.replace(/"/g, '""')}"`,
+        donorEmail,
+        donorPhone,
+        amount,
+        purpose,
+        transactionId,
+        paymentMethod,
+        status
+      ];
+      
+      rows.push(row.join(','));
+    }
+    
+    const csv = rows.join('\n');
+    
+    console.log(`CSV generated successfully, ${donations.length} rows`);
+    
+    // Set response headers for CSV download
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename=donations_${Date.now()}.csv`);
+    res.setHeader('Cache-Control', 'no-cache');
+    
     res.status(200).send(csv);
+    
   } catch (error) {
     console.error('Export donations error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to export donations',
+      error: error.message
+    });
+  }
+};
+
+// Export user's own donations to CSV (member only)
+// Export user's own donations to CSV (member only)
+exports.exportMyDonations = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    console.log(`Exporting donations for user: ${userId}`);
+    
+    // Fetch user's completed donations
+    const donations = await Donation.find({ 
+      user: userId,
+      status: 'completed' 
+    })
+      .sort({ createdAt: -1 });
+
+    console.log(`Found ${donations.length} donations for user`);
+
+    // Define CSV headers
+    const headers = [
+      'Date', 
+      'Amount (₦)', 
+      'Purpose', 
+      'Transaction ID', 
+      'Payment Method',
+      'Status'
+    ];
+    
+    // Create CSV rows
+    const csvRows = [];
+    
+    // Add header row
+    csvRows.push(headers.join(','));
+    
+    // Add data rows
+    for (const donation of donations) {
+      // Format date
+      const date = donation.createdAt 
+        ? new Date(donation.createdAt).toISOString().split('T')[0] 
+        : 'N/A';
+      
+      const row = [
+        date,
+        donation.amount || 0,
+        donation.purpose || 'N/A',
+        donation.transactionId || 'N/A',
+        donation.paymentMethod || 'N/A',
+        donation.status || 'N/A'
+      ];
+      
+      csvRows.push(row.join(','));
+    }
+    
+    const csv = csvRows.join('\n');
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=my_donations_${Date.now()}.csv`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    
+    console.log(`Export successful: ${donations.length} donations exported`);
+    res.status(200).send(csv);
+    
+  } catch (error) {
+    console.error('Export my donations error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export your donations',
       error: error.message
     });
   }

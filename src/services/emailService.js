@@ -6,13 +6,13 @@ class EmailService {
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT),
-      secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+      secure: process.env.SMTP_PORT === '465',
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
       tls: {
-        rejectUnauthorized: false // Only for development
+        rejectUnauthorized: false
       }
     });
 
@@ -29,7 +29,6 @@ class EmailService {
     }
   }
 
-  // Send email with HTML template
   async sendEmail(to, subject, html, from = null) {
     try {
       const mailOptions = {
@@ -37,7 +36,6 @@ class EmailService {
         to: Array.isArray(to) ? to.join(', ') : to,
         subject,
         html,
-        // Add text version as fallback
         text: html.replace(/<[^>]*>/g, '')
       };
 
@@ -50,7 +48,77 @@ class EmailService {
     }
   }
 
-  // Send welcome email on registration
+  // Send verification email - CLEAN URL VERSION
+  async sendVerificationEmail(user, verificationUrl) {
+    // CRITICAL FIX: Remove any quotes, spaces, or special characters from URL
+    const cleanUrl = verificationUrl.replace(/["']/g, '').trim();
+    
+    console.log('📧 Sending verification email to:', user.email);
+    console.log('🔗 Clean URL:', cleanUrl);
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Verify Your Email - CSPAPP Church</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #1E3A8A; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header h1 { color: #D4AF77; margin: 0; font-size: 28px; }
+          .content { background-color: #ffffff; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .button { display: inline-block; padding: 12px 24px; background-color: #D4AF77; color: #000; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+          .button:hover { background-color: #c4a060; }
+          .warning { background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107; }
+          .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+          .link-box { word-break: break-all; background-color: #f4f4f4; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🏛️ CSPAPP Church</h1>
+          </div>
+          <div class="content">
+            <h2>Welcome to CSPAPP Church, ${user.fullName}! 🙏</h2>
+            <p>Thank you for registering. Please verify your email address to complete your registration.</p>
+            
+            <div style="text-align: center;">
+              <a href="${cleanUrl}" class="button">✓ Verify Email Address</a>
+            </div>
+            
+            <div class="warning">
+              <p><strong>⚠️ This link will expire in 24 hours.</strong></p>
+              <p>If you didn't create an account, you can safely ignore this email.</p>
+            </div>
+            
+            <p>If the button doesn't work, copy and paste this link into your browser:</p>
+            <div class="link-box">${cleanUrl}</div>
+            
+            <p>After verification, you'll be able to:</p>
+            <ul>
+              <li>💝 Make donations and track your giving</li>
+              <li>📅 Register for church events</li>
+              <li>👤 Manage your profile information</li>
+              <li>📧 Receive church communications</li>
+            </ul>
+            
+            <p>God bless you,<br><strong>CSPAPP Church Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} CSPAPP Church. All rights reserved.</p>
+            <p>You received this email because you registered with CSPAPP Church.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return await this.sendEmail(user.email, 'Verify Your Email - CSPAPP Church', html);
+  }
+
+  // Send welcome email
   async sendWelcomeEmail(user) {
     const html = `
       <!DOCTYPE html>
@@ -94,7 +162,6 @@ class EmailService {
           </div>
           <div class="footer">
             <p>© ${new Date().getFullYear()} CSPAPP Church. All rights reserved.</p>
-            <p>You received this email because you registered with CSPAPP Church.</p>
           </div>
         </div>
       </body>
@@ -197,7 +264,7 @@ class EmailService {
               <li>🙏 Peace that surpasses all understanding</li>
             </ul>
             
-            <p>We're grateful to have you as part of our church family. Please join us this Sunday as we celebrate all our birthday celebrants.</p>
+            <p>We're grateful to have you as part of our church family.</p>
             
             <p><strong>May this new year of your life bring unprecedented blessings!</strong></p>
             
@@ -215,7 +282,7 @@ class EmailService {
     return await this.sendEmail(user.email, '🎂 Happy Birthday from CSPAPP Church! 🎉', html);
   }
 
-  // Send mass email to multiple recipients
+  // Send mass email
   async sendMassEmail(recipients, subject, message) {
     const html = `
       <!DOCTYPE html>
@@ -255,8 +322,8 @@ class EmailService {
   }
 
   // Send password reset email
-  async sendPasswordResetEmail(user, resetToken) {
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+  async sendPasswordResetEmail(user, resetUrl) {
+    const cleanUrl = resetUrl.replace(/["']/g, '').trim();
     
     const html = `
       <!DOCTYPE html>
@@ -268,6 +335,7 @@ class EmailService {
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
           .header { background-color: #1E3A8A; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header h1 { color: #D4AF77; margin: 0; }
           .content { background-color: #ffffff; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
           .button { display: inline-block; padding: 12px 24px; background-color: #D4AF77; color: #000; text-decoration: none; border-radius: 5px; margin: 20px 0; }
           .warning { background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; }
@@ -284,7 +352,7 @@ class EmailService {
             <p>We received a request to reset your password for your CSPAPP Church account.</p>
             
             <div style="text-align: center;">
-              <a href="${resetUrl}" class="button">Reset Password</a>
+              <a href="${cleanUrl}" class="button">Reset Password</a>
             </div>
             
             <div class="warning">
