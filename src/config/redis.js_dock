@@ -1,0 +1,103 @@
+const Redis = require('ioredis');
+
+let redisClient = null;
+
+const initRedis = () => {
+  if (!redisClient) {
+    const redisConfig = {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT) || 6379,
+      db: parseInt(process.env.REDIS_DB) || 0,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+    };
+
+    // Add password if provided
+    if (process.env.REDIS_PASSWORD) {
+      redisConfig.password = process.env.REDIS_PASSWORD;
+    }
+
+    redisClient = new Redis(redisConfig);
+
+    redisClient.on('connect', () => {
+      console.log('✅ Redis connected successfully');
+    });
+
+    redisClient.on('error', (err) => {
+      console.error('❌ Redis connection error:', err.message);
+    });
+
+    redisClient.on('ready', () => {
+      console.log('✅ Redis is ready');
+    });
+  }
+
+  return redisClient;
+};
+
+const getRedisClient = () => {
+  if (!redisClient) {
+    return initRedis();
+  }
+  return redisClient;
+};
+
+// Cache middleware
+const cacheMiddleware = (duration = 300) => {
+  return async (req, res, next) => {
+    if (process.env.NODE_ENV === 'development') {
+      return next();
+    }
+
+    const key = `cache:${req.originalUrl || req.url}`;
+    
+    try {
+      const redis = getRedisClient();
+      const cachedData = await redis.get(key);
+      
+      if (cachedData) {
+        console.log(`Cache hit for: ${key}`);
+        return res.status(200).json(JSON.parse(cachedData));
+      }
+      
+      // Store original send function
+      const originalSend = res.json;
+      res.json = function(data) {
+        // Cache successful responses
+        if (res.statusCode === 200) {
+          redis.setex(key, duration, JSON.stringify(data));
+        }
+        originalSend.call(this, data);
+      };
+      
+      next();
+    } catch (error) {
+      console.error('Cache middleware error:', error);
+      next();
+    }
+  };
+};
+
+// Clear cache helper
+const clearCache = async (pattern) => {
+  try {
+    const redis = getRedisClient();
+    const keys = await redis.keys(pattern);
+    if (keys.length > 0) {
+      await redis.del(keys);
+      console.log(`Cleared ${keys.length} cache entries for pattern: ${pattern}`);
+    }
+  } catch (error) {
+    console.error('Clear cache error:', error);
+  }
+};
+
+module.exports = {
+  initRedis,
+  getRedisClient,
+  cacheMiddleware,
+  clearCache,
+};

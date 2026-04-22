@@ -3,6 +3,7 @@ const { generateToken, generateRefreshToken, verifyToken } = require('../utils/j
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const crypto = require('crypto');
+const { success } = require('zod/v4');
 
 // Register new user with email verification
 exports.register = async (req, res) => {
@@ -22,6 +23,7 @@ exports.register = async (req, res) => {
 
     console.log('=================================');
     console.log('Registration attempt for email:', email);
+    console.log('Phone number:', phoneNumber);
     console.log('=================================');
 
     // Check if user already exists
@@ -33,12 +35,33 @@ exports.register = async (req, res) => {
       });
     }
 
+    //Check if phone number exist
+    const existingPhone = await User.findOne ({phoneNumber});
+
+  if (existingPhone) {
+    return res.status(400).json({
+      success: false,
+      message: 'This phone number is already registered, please use a different phone number or login to your existing account.'
+    });
+  }
+
+   // Format phone number to standard format (optional but recommended)
+    let formattedPhone = phoneNumber;
+    // Remove any non-digit characters except '+'
+    formattedPhone = formattedPhone.replace(/[^\d+]/g, '');
+    // Ensure it starts with country code (add +234 if it starts with 0)
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = '+234' + formattedPhone.substring(1);
+    } else if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
+    }
     // Generate email verification token
     const emailVerificationToken = crypto.randomBytes(32).toString('hex');
     const emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
 
     console.log('Generated token:', emailVerificationToken);
     console.log('Token expires:', new Date(emailVerificationExpires).toISOString());
+    console.log('Formatted phone:', formattedPhone);
 
     // Create new user
     const user = await User.create({
@@ -46,7 +69,7 @@ exports.register = async (req, res) => {
       email,
       password,
       dateOfBirth,
-      phoneNumber,
+      phoneNumber: formattedPhone,
       permanentAddress,
       residentialAddress,
       graduationYear,
@@ -76,6 +99,14 @@ exports.register = async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+// Handle duplicate key error for phone number
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'This phone number is already registered. Please use a different phone number.'
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Registration failed',

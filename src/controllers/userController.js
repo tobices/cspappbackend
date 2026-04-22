@@ -1,4 +1,20 @@
 const User = require('../models/User');
+const { formatPhoneNumber, isPhoneNumberExists } = require('../utils/phoneHelper');
+
+let cacheService;
+
+// Try to load cache service, but don't fail if not available
+try {
+  cacheService = require('../services/cacheService');
+} catch (error) {
+  console.log('⚠️ Cache service not available, continuing without caching');
+  cacheService = {
+    get: async () => null,
+    set: async () => {},
+    del: async () => {},
+    delPattern: async () => {}
+  };
+}
 
 // Get all users (admin only)
 exports.getAllUsers = async (req, res) => {
@@ -61,6 +77,14 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    // Check authorization (users can only view themselves, admins can view anyone)
+    if (req.user.role !== 'admin' && req.user.id !== user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
     res.status(200).json({
       success: true,
       data: { user }
@@ -100,6 +124,24 @@ exports.updateCurrentUser = async (req, res) => {
     const userId = req.user.id;
     const updates = req.body;
     
+    console.log('Updating current user:', userId);
+    console.log('Update data:', updates);
+    
+    // Check if phone number is being updated and if it already exists
+    if (updates.phoneNumber) {
+      const formattedPhone = formatPhoneNumber(updates.phoneNumber);
+      const phoneExists = await isPhoneNumberExists(User, formattedPhone, userId);
+      
+      if (phoneExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'This phone number is already registered to another user'
+        });
+      }
+      updates.phoneNumber = formattedPhone;
+    }
+
+    // Remove sensitive fields
     delete updates.password;
     delete updates.role;
     delete updates.email;
@@ -124,6 +166,14 @@ exports.updateCurrentUser = async (req, res) => {
     });
   } catch (error) {
     console.error('Update current user error:', error);
+
+       // Handle duplicate key error for phone number
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'This phone number is already registered to another user'
+      });
+    }
     res.status(500).json({
       success: false,
       message: 'Failed to update profile',
@@ -147,10 +197,22 @@ exports.updateUser = async (req, res) => {
         message: 'User ID is required'
       });
     }
+    // Check if phone number is being updated and if it already exists
+    if (updates.phoneNumber) {
+      const formattedPhone = formatPhoneNumber(updates.phoneNumber);
+      const phoneExists = await isPhoneNumberExists(User, formattedPhone, id);
+      
+      if (phoneExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'This phone number is already registered to another user'
+        });
+      }
+      updates.phoneNumber = formattedPhone;
+    }
     
     // Remove sensitive fields
     delete updates.password;
-    delete updates.confirmPassword;
     delete updates.role;
     delete updates.email;
 
@@ -174,6 +236,15 @@ exports.updateUser = async (req, res) => {
     });
   } catch (error) {
     console.error('Update user error:', error);
+
+     // Handle duplicate key error for phone number
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'This phone number is already registered to another user'
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Failed to update user',
@@ -187,13 +258,6 @@ exports.deleteUser = async (req, res) => {
   try {
     const userId = req.params.id;
     console.log('Deleting user ID:', userId);
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'User ID is required'
-      });
-    }
     
     const user = await User.findByIdAndDelete(userId);
     

@@ -35,7 +35,11 @@ const userSchema = new mongoose.Schema({
   phoneNumber: {
     type: String,
     required: [true, 'Phone number is required'],
+    unique:true,
+    sparse:true,
+    trim:true,
     match: [/^[0-9+\-\s()]+$/, 'Please provide a valid phone number']
+   
   },
   permanentAddress: {
     type: String,
@@ -110,6 +114,7 @@ userSchema.virtual('displayName').get(function() {
 
 // Index for faster queries
 userSchema.index({ email: 1 });
+userSchema.index({phoneNumber: 1}, {unique: true, sparse: true});
 userSchema.index({ role: 1 });
 userSchema.index({ unit: 1 });
 userSchema.index({ createdAt: -1 });

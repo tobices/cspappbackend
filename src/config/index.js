@@ -15,6 +15,14 @@ module.exports = {
       useUnifiedTopology: true,
     }
   },
+
+   // Redis configuration
+  redisConfig: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT) || 6379,
+    password: process.env.REDIS_PASSWORD,
+    db: parseInt(process.env.REDIS_DB) || 0,
+  },
   
   // Server configuration
   serverConfig: {
@@ -60,5 +68,11 @@ module.exports = {
   rateLimitConfig: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000,
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
-  }
+  },
+
+  // Cache configuration
+  cacheConfig: {
+    ttl: parseInt(process.env.CACHE_TTL) || 300,
+    enabled: process.env.NODE_ENV === 'production',
+  },
 };
